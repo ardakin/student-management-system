@@ -27,18 +27,35 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 INIT_TOKEN = os.getenv("INIT_TOKEN", "student-management-system-123")
 
 # --------------------------------------------------------
+# Cloud ortam tespiti
+IN_CLOUD = bool(os.getenv("FIREBASE_CONFIG") or os.getenv("K_SERVICE"))
+
 # DATABASE URL + fallback
 # --------------------------------------------------------
-if not DATABASE_URL:
-    root = BASE_DIR.parent
-    DATABASE_URL = f"sqlite:///{root / 'instance' / 'students.db'}"
+if IN_CLOUD:
+    db_dir = Path("/tmp")
+else:
+    db_dir = BASE_DIR.parent / "instance"
+db_dir.mkdir(parents=True, exist_ok=True)
+FALLBACK_SQLITE_URL = f"sqlite:///{db_dir / 'students.db'}"
 
-if DATABASE_URL.startswith("postgres://"):
+if not DATABASE_URL:
+    DATABASE_URL = FALLBACK_SQLITE_URL
+elif DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 
-if DATABASE_URL.startswith("postgresql+psycopg2://") and "sslmode=" not in DATABASE_URL:
-    sep = "&" if "?" in DATABASE_URL else "?"
-    DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
+if DATABASE_URL.startswith("postgresql+psycopg2://"):
+    if "sslmode=" not in DATABASE_URL:
+        sep = "&" if "?" in DATABASE_URL else "?"
+        DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
+    try:
+        from sqlalchemy import create_engine
+        temp_engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 3})
+        with temp_engine.connect() as conn:
+            pass
+    except Exception as e:
+        print(f"⚠️ Postgres Connection Failed ({e}), falling back to SQLite: {FALLBACK_SQLITE_URL}")
+        DATABASE_URL = FALLBACK_SQLITE_URL
 
 # --------------------------------------------------------
 # 🔥 FLASK APP
@@ -54,9 +71,6 @@ app.wsgi_app = ProxyFix(
     x_host=1,
     x_prefix=1,
 )
-
-# Cloud ortam tespiti
-IN_CLOUD = bool(os.getenv("FIREBASE_CONFIG"))
 
 if IN_CLOUD:
     app.config.update(
@@ -76,7 +90,6 @@ else:
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_PATH="/",
     )
-
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -114,6 +127,15 @@ class StudentNote(db.Model):
     text       = db.Column(db.Text, nullable=False)
     author     = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+with app.app_context():
+    try:
+        db.create_all()
+        if not User.query.filter_by(username="admin").first():
+            db.session.add(User(username="admin", password=generate_password_hash("Admin123!")))
+            db.session.commit()
+    except Exception as _e:
+        print("DB INIT WARNING:", _e)
 
 
 # -------------------------------
