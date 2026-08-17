@@ -318,6 +318,10 @@ def logout():
 def health():
     return "OK", 200
 
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204
+
 @app.route("/whoami")
 @login_required
 def whoami():

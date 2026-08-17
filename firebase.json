@@ -8,11 +8,13 @@
     ],
     "cleanUrls": true,
 
-    "redirects": [
+    "rewrites": [
       {
         "source": "**",
-        "destination": "https://serving-t35jlabjpq-uc.a.run.app",
-        "type": 302
+        "function": {
+          "functionId": "serving",
+          "region": "us-central1"
+        }
       }
     ]
   },
