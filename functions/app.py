@@ -1,4 +1,6 @@
 import os
+import socket
+from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 
@@ -39,23 +41,30 @@ else:
 db_dir.mkdir(parents=True, exist_ok=True)
 FALLBACK_SQLITE_URL = f"sqlite:///{db_dir / 'students.db'}"
 
-if not DATABASE_URL:
-    DATABASE_URL = FALLBACK_SQLITE_URL
-elif DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+def is_db_reachable(db_url):
+    if not db_url or not (db_url.startswith("postgres://") or db_url.startswith("postgresql")):
+        return False
+    try:
+        parsed = urlparse(db_url)
+        host = parsed.hostname
+        if not host:
+            return False
+        ip = socket.gethostbyname(host)
+        port = parsed.port or 5432
+        with socket.create_connection((ip, port), timeout=2):
+            return True
+    except Exception as err:
+        print(f"⚠️ Postgres DB host unreachable ({err}), using SQLite fallback.")
+        return False
 
-if DATABASE_URL.startswith("postgresql+psycopg2://"):
-    if "sslmode=" not in DATABASE_URL:
+if not is_db_reachable(DATABASE_URL):
+    DATABASE_URL = FALLBACK_SQLITE_URL
+else:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+    if DATABASE_URL.startswith("postgresql+psycopg2://") and "sslmode=" not in DATABASE_URL:
         sep = "&" if "?" in DATABASE_URL else "?"
         DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
-    try:
-        from sqlalchemy import create_engine
-        temp_engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 3})
-        with temp_engine.connect() as conn:
-            pass
-    except Exception as e:
-        print(f"⚠️ Postgres Connection Failed ({e}), falling back to SQLite: {FALLBACK_SQLITE_URL}")
-        DATABASE_URL = FALLBACK_SQLITE_URL
 
 # --------------------------------------------------------
 # 🔥 FLASK APP
