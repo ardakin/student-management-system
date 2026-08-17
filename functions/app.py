@@ -85,6 +85,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "student-management-system-secret-key-
 
 app.config.update(
     SECRET_KEY=SECRET_KEY,
+    SESSION_COOKIE_NAME="__session",
     SESSION_COOKIE_SECURE=False,
     REMEMBER_COOKIE_SECURE=False,
     SESSION_COOKIE_SAMESITE="Lax",
