@@ -81,24 +81,16 @@ app.wsgi_app = ProxyFix(
     x_prefix=1,
 )
 
-if IN_CLOUD:
-    app.config.update(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "cloud-secret"),
-        SESSION_COOKIE_SECURE=True,
-        REMEMBER_COOKIE_SECURE=True,
-        SESSION_COOKIE_SAMESITE="None",
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_PATH="/",
-    )
-else:
-    app.config.update(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "local-dev-key"),
-        SESSION_COOKIE_SECURE=False,      # HTTP için böyle kalacak
-        REMEMBER_COOKIE_SECURE=False,
-        SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_PATH="/",
-    )
+SECRET_KEY = os.environ.get("SECRET_KEY", "student-management-system-secret-key-2026")
+
+app.config.update(
+    SECRET_KEY=SECRET_KEY,
+    SESSION_COOKIE_SECURE=False,
+    REMEMBER_COOKIE_SECURE=False,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_PATH="/",
+)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -333,7 +325,10 @@ def login():
 
         next_url = request.args.get("next")
         if next_url:
-            return redirect(next_url)
+            from urllib.parse import unquote
+            next_url = unquote(next_url)
+            if next_url.startswith("/") and not next_url.startswith("//"):
+                return redirect(next_url)
 
         return redirect(url_for("dashboard"))
 
